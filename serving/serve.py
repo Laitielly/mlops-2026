@@ -35,62 +35,58 @@ _model_id   = None
 
 
 def load_model_from_registry():
-    """Загружает модель из ClearML Model Registry."""
     global _vectorizer, _classifier, _model_id
 
-    root     = Path(__file__).parent.parent
     model_id = os.getenv("MODEL_ID", "").strip()
     task_id  = os.getenv("TASK_ID", "").strip()
 
-    # Fallback на файлы
     if not model_id:
-        model_id_path = Path(__file__).parent.parent / "best_model_id.txt"
-        if model_id_path.exists():
-            model_id = model_id_path.read_text().strip()
-        else:
-            raise RuntimeError("MODEL_ID не задан через env и файл не найден")
-
+        raise RuntimeError("MODEL_ID не задан через env")
     if not task_id:
-        task_id_path = Path(__file__).parent.parent / "best_task_id.txt"
-        if task_id_path.exists():
-            task_id = task_id_path.read_text().strip()
-        else:
-            raise RuntimeError("TASK_ID не задан через env и файл не найден")
+        raise RuntimeError("TASK_ID не задан через env")
 
     log.info(f"Загружаем модель {model_id} из ClearML Registry...")
+    log.info(f"Task ID: {task_id}")
 
     model      = Model(model_id=model_id)
     model_path = model.get_local_copy()
-    log.info(f"Модель скачана: {model_path}")
 
-    extract_dir = root / "artifacts" / "unpacked"
+    extract_dir = Path("/app/artifacts/unpacked")
     extract_dir.mkdir(parents=True, exist_ok=True)
 
-    if os.path.isdir(model_path):
-        vec_path = Path(model_path) / "vectorizer.pkl"
-        clf_path = Path(model_path) / "classifier.pkl"
-    elif str(model_path).endswith(".zip"):
-        with zipfile.ZipFile(model_path, "r") as zf:
-            zf.extractall(extract_dir)
-        vec_path = extract_dir / "vectorizer.pkl"
-        clf_path = extract_dir / "classifier.pkl"
-    elif str(model_path).endswith("vectorizer.pkl"):
-        base     = Path(model_path).parent
-        vec_path = Path(model_path)
-        clf_path = base / "classifier.pkl"
+    if model_path and os.path.exists(str(model_path)):
+        log.info(f"Модель скачана: {model_path}")
+
+        if os.path.isdir(model_path):
+            vec_path = Path(model_path) / "vectorizer.pkl"
+            clf_path = Path(model_path) / "classifier.pkl"
+        elif str(model_path).endswith(".zip"):
+            with zipfile.ZipFile(model_path, "r") as zf:
+                zf.extractall(extract_dir)
+            vec_path = extract_dir / "vectorizer.pkl"
+            clf_path = extract_dir / "classifier.pkl"
+        elif str(model_path).endswith("vectorizer.pkl"):
+            vec_path = Path(model_path)
+            clf_path = Path(model_path).parent / "classifier.pkl"
+        else:
+            vec_path = Path(model_path)
+            clf_path = None
     else:
-        vec_path = Path(model_path)
+        log.warning("Model.get_local_copy() вернул None — берём из артефактов задачи")
+        vec_path = None
         clf_path = None
 
-    if clf_path is None or not clf_path.exists():
-        log.warning("Classifier не найден рядом, берём из артефактов задачи...")
-        task     = Task.get_task(task_id=task_id)
-        clf_path = Path(task.artifacts["classifier"].get_local_copy())
-
-    if not vec_path.exists():
-        log.warning("Vectorizer не найден рядом, берём из артефактов задачи...")
+    if vec_path is None or not vec_path.exists():
+        log.info("Загружаем vectorizer из артефактов задачи...")
         task     = Task.get_task(task_id=task_id)
         vec_path = Path(task.artifacts["vectorizer"].get_local_copy())
+        log.info(f"Vectorizer: {vec_path}")
+
+    if clf_path is None or not clf_path.exists():
+        log.info("Загружаем classifier из артефактов задачи...")
+        task     = Task.get_task(task_id=task_id)
+        clf_path = Path(task.artifacts["classifier"].get_local_copy())
+        log.info(f"Classifier: {clf_path}")
 
     _vectorizer = joblib.load(vec_path)
     _classifier = joblib.load(clf_path)
