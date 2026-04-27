@@ -39,8 +39,23 @@ def load_model_from_registry():
     global _vectorizer, _classifier, _model_id
 
     root     = Path(__file__).parent.parent
-    model_id = (root / "best_model_id.txt").read_text().strip()
-    task_id  = (root / "best_task_id.txt").read_text().strip()
+    model_id = os.getenv("MODEL_ID", "").strip()
+    task_id  = os.getenv("TASK_ID", "").strip()
+
+    # Fallback на файлы
+    if not model_id:
+        model_id_path = Path(__file__).parent.parent / "best_model_id.txt"
+        if model_id_path.exists():
+            model_id = model_id_path.read_text().strip()
+        else:
+            raise RuntimeError("MODEL_ID не задан через env и файл не найден")
+
+    if not task_id:
+        task_id_path = Path(__file__).parent.parent / "best_task_id.txt"
+        if task_id_path.exists():
+            task_id = task_id_path.read_text().strip()
+        else:
+            raise RuntimeError("TASK_ID не задан через env и файл не найден")
 
     log.info(f"Загружаем модель {model_id} из ClearML Registry...")
 
