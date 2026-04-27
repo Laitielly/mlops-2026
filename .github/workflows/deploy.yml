@@ -30,7 +30,8 @@ jobs:
             git pull origin main
             source .env
             docker compose -f docker-compose.prod.yml up -d --build serving ui
-            
+
+            set +e
             echo "Ждём запуска serving (до 90 секунд)..."
             for i in $(seq 1 18); do
               sleep 5
@@ -46,6 +47,7 @@ jobs:
                 docker logs clearml-serving --tail=30
               fi
             done
+            set -e
 
             echo ""
             echo "=== Итоговый статус контейнеров ==="
