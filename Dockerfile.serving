@@ -8,14 +8,8 @@ RUN pip install --no-cache-dir -r requirements.serving.txt
 COPY app_config/ ./app_config/
 COPY serving/ ./serving/
 
-ENV CLEARML_API_HOST=""
-ENV CLEARML_API_ACCESS_KEY=""
-ENV CLEARML_API_SECRET_KEY=""
-ENV CLEARML_FILES_HOST=""
 ENV SERVING_HOST="0.0.0.0"
 ENV SERVING_PORT="9000"
-ENV MODEL_ID=""
-ENV TASK_ID=""
 
 EXPOSE 9000
 

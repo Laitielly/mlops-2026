@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.ui.txt
 COPY app_config/ ./app_config/
 COPY ui/ ./ui/
 
-ENV SERVING_URL="http://localhost:9000/serve/news-topic"
+ENV SERVING_URL="http://serving:9000/serve/news-topic"
 
 EXPOSE 8501
 
