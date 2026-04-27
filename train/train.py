@@ -183,9 +183,10 @@ output_model = OutputModel(
     framework="scikit-learn",
     label_enumeration={cls: i for i, cls in enumerate(CLASS_NAMES)},
 )
+upload_uri = os.environ.get("CLEARML_FILES_HOST", "http://localhost:8081")
 output_model.update_weights(
     weights_filename=str(zip_path),
-    upload_uri="http://localhost:8081",
+    upload_uri=upload_uri,
     auto_delete_file=False,
 )
 output_model.update_design(config_dict={
