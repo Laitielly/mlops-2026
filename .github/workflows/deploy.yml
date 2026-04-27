@@ -24,6 +24,8 @@ jobs:
             set -e
 
             PROJECT_DIR=/opt/mlops
+            git config --global --add safe.directory $PROJECT_DIR
+
             cd $PROJECT_DIR
             git pull origin main
             source .env
