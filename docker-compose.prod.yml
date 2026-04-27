@@ -8,12 +8,9 @@ services:
       dockerfile: Dockerfile.serving
     container_name: clearml-serving
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      CLEARML_API_HOST: ${CLEARML_API_HOST}
-      CLEARML_WEB_HOST: ${CLEARML_WEB_HOST}
-      CLEARML_FILES_HOST: ${CLEARML_FILES_HOST}
-      CLEARML_API_ACCESS_KEY: ${CLEARML_API_ACCESS_KEY}
-      CLEARML_API_SECRET_KEY: ${CLEARML_API_SECRET_KEY}
       SERVING_HOST: "0.0.0.0"
       SERVING_PORT: "9000"
     ports:
@@ -28,7 +25,7 @@ services:
     container_name: clearml-ui
     restart: unless-stopped
     environment:
-      SERVING_URL: http://serving:9000/serve/news-topic
+      SERVING_URL: "http://serving:9000/serve/news-topic"
     ports:
       - "8501:8501"
     depends_on:

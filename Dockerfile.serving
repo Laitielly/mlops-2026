@@ -5,23 +5,18 @@ WORKDIR /app
 COPY requirements.txt requirements.serving.txt ./
 RUN pip install --no-cache-dir -r requirements.serving.txt
 
-COPY config/ ./config/
+COPY app_config/ ./app_config/
 COPY serving/ ./serving/
-COPY best_model_id.txt best_task_id.txt ./
 
-# ClearML конфиг
 ENV CLEARML_API_HOST=""
 ENV CLEARML_API_ACCESS_KEY=""
 ENV CLEARML_API_SECRET_KEY=""
+ENV CLEARML_FILES_HOST=""
 ENV SERVING_HOST="0.0.0.0"
 ENV SERVING_PORT="9000"
+ENV MODEL_ID=""
+ENV TASK_ID=""
 
 EXPOSE 9000
 
-
-CMD ["gunicorn", \
-     "--bind", "0.0.0.0:9000", \
-     "--workers", "2", \
-     "--timeout", "60", \
-     "--access-logfile", "-", \
-     "serving.serve:app"]
+CMD ["python", "serving/serve.py"]

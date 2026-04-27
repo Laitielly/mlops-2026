@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt requirements.ui.txt ./
 RUN pip install --no-cache-dir -r requirements.ui.txt
 
-COPY config/ ./config/
+COPY app_config/ ./app_config/
 COPY ui/ ./ui/
 
 ENV SERVING_URL="http://localhost:9000/serve/news-topic"
