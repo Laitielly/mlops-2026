@@ -1,30 +1,33 @@
 """
-Находит лучший эксперимент по f1_macro и публикует модель в Model Registry.
+Находит лучший эксперимент и регистрирует модель.
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from app_config import cfg
 from clearml import Task, Model
 
 
-PROJECT = "news_topic_classification"
-
-
-def get_best_task() -> Task:
-    """Возвращает задачу с наибольшим f1_macro."""
+def get_best_task():
     tasks = Task.get_tasks(
-        project_name=PROJECT,
+        project_name=cfg.clearml.project_name,
         task_filter={
             "status": ["completed"],
             "type":   ["training"],
         }
     )
 
-    best_task   = None
-    best_f1     = -1.0
+    if not tasks:
+        raise RuntimeError("Нет завершённых задач обучения")
+
+    best_task = None
+    best_f1   = -1.0
 
     for t in tasks:
-        scalars = t.get_last_scalar_metrics()
         try:
-            f1 = scalars["metrics"]["f1_macro"]["last"]
+            f1 = t.get_last_scalar_metrics()["metrics"]["f1_macro"]["last"]
         except (KeyError, TypeError):
             continue
 
@@ -35,46 +38,39 @@ def get_best_task() -> Task:
             best_task = t
 
     if best_task is None:
-        raise RuntimeError("Нет завершённых задач с метрикой f1_macro")
+        raise RuntimeError("Нет задач с метрикой f1_macro")
 
     print(f"\n🏆 Лучшая задача: '{best_task.name}' (f1_macro={best_f1:.4f})")
     return best_task, best_f1
 
 
-def register(best_task: Task, best_f1: float):
-    """Публикует модель из задачи в Model Registry."""
-
+def register(best_task: Task, best_f1: float) -> str:
     models = best_task.get_models()["output"]
     if not models:
         raise RuntimeError(f"У задачи {best_task.id} нет output-моделей")
 
-    source_model: Model = models[0]
-    print(f"Модель-источник: {source_model.name} | ID: {source_model.id}")
+    model: Model = models[0]
+    print(f"Модель: {model.name} | ID: {model.id}")
 
     scalars = best_task.get_last_scalar_metrics()
     acc = scalars.get("metrics", {}).get("accuracy", {}).get("last", 0.0)
-    source_model.publish()
-    source_model.update_tags(["production", "logreg", "ag_news"])
 
-    config = source_model.get_model_design() or {}
-    config.update({
-        "registry_note": "Best model by f1_macro",
-        "accuracy":      acc,
-        "f1_macro":      best_f1,
-        "source_task":   best_task.id,
-    })
-    source_model.update_design(config_dict=config)
+    model.publish()
+    model.tags = ["production", "logreg", "ag_news"]
 
-    print(f"\n✅ Модель зарегистрирована в Registry")
-    print(f"   Model ID : {source_model.id}")
-    print(f"   Tags     : {source_model.tags}")
+    print(f"\n✅ Модель зарегистрирована")
+    print(f"   Model ID : {model.id}")
+    print(f"   Tags     : {model.tags}")
+    print(f"   Accuracy : {acc:.4f}")
+    print(f"   F1 macro : {best_f1:.4f}")
 
-    with open("best_model_id.txt", "w") as f:
-        f.write(source_model.id)
+    root = Path(__file__).parent.parent
+    (root / "best_model_id.txt").write_text(model.id)
+    (root / "best_task_id.txt").write_text(best_task.id)
 
-    return source_model.id
+    return model.id
 
 
 if __name__ == "__main__":
     best_task, best_f1 = get_best_task()
-    model_id = register(best_task, best_f1)
+    register(best_task, best_f1)

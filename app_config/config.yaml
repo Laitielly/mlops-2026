@@ -1,0 +1,47 @@
+# Все параметры берутся отсюда, env переменные имеют приоритет
+
+clearml:
+  project_name: "news_topic_classification"
+  dataset_name: "ag_news_topic"
+  dataset_version: "1.0"
+  queue_name: "students"
+  serving_name: "news-topic-serving"
+  endpoint: "news-topic"
+
+data:
+  train_size: 4000
+  test_size: 1000
+  label_names:
+    - "World"
+    - "Sports"
+    - "Business"
+    - "Sci/Tech"
+
+training:
+  experiments:
+    - name: "logreg_baseline"
+      max_features: 20000
+      ngram_max: 1
+      C: 1.0
+      max_iter: 300
+      solver: "lbfgs"
+      random_seed: 42
+    - name: "logreg_bigram_highC"
+      max_features: 50000
+      ngram_max: 2
+      C: 5.0
+      max_iter: 500
+      solver: "lbfgs"
+      random_seed: 42
+
+serving:
+  host: "0.0.0.0"
+  port: 9000
+  endpoint: "/serve/news-topic"
+  health_endpoint: "/health"
+  timeout: 30
+
+ui:
+  port: 8501
+  default_serving_url: "http://localhost:9000/serve/news-topic"
+  request_timeout: 10

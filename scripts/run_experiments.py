@@ -1,49 +1,51 @@
 """
-Отправляет два эксперимента с разными гиперпараметрами в очередь 'students'.
+Запускает эксперименты из конфига.
 """
 
-from clearml import Task
+import subprocess
+import sys
+import os
+from pathlib import Path
 
-DATASET_ID = open("dataset/dataset_id.txt").read().strip()
-
-EXPERIMENTS = [
-    {
-        "name": "logreg_baseline",
-        "params": {
-            "dataset_id":   DATASET_ID,
-            "max_features": 20000,
-            "ngram_max":    1,
-            "C":            1.0,
-            "max_iter":     300,
-            "solver":       "lbfgs",
-            "random_seed":  42,
-        }
-    },
-    {
-        "name": "logreg_bigram_highC",
-        "params": {
-            "dataset_id":   DATASET_ID,
-            "max_features": 50000,
-            "ngram_max":    2,
-            "C":            5.0,
-            "max_iter":     500,
-            "solver":       "lbfgs",
-            "random_seed":  42,
-        }
-    },
-]
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from app_config import cfg
 
 
-for exp in EXPERIMENTS:
-    task = Task.create(
-        project_name="news_topic_classification",
-        task_name=exp["name"],
-        script="train/train.py",
-        add_task_init_call=True,
-    )
+def main():
+    dataset_id_path = Path(__file__).parent.parent / "dataset" / "dataset_id.txt"
 
-    task.set_parameters_as_dict({"hyperparams": exp["params"]})
-    task.execute_remotely(queue_name="students", clone=False, exit_process=False)
+    if not dataset_id_path.exists():
+        raise FileNotFoundError(
+            "dataset/dataset_id.txt не найден. "
+            "Сначала запусти: python dataset/upload_dataset.py"
+        )
 
-    print(f"✅ Эксперимент '{exp['name']}' отправлен в очередь 'students'")
-    print(f"   Task ID: {task.id}")
+    dataset_id = dataset_id_path.read_text().strip()
+    print(f"Dataset ID: {dataset_id}\n")
+
+    for exp in cfg.training.experiments:
+        print(f"🚀 Запускаем: {exp.name}")
+
+        env = os.environ.copy()
+        env.update({
+            "EXPERIMENT_NAME": exp.name,
+            "DATASET_ID":      dataset_id,
+            "MAX_FEATURES":    str(exp.max_features),
+            "NGRAM_MAX":       str(exp.ngram_max),
+            "C":               str(exp.C),
+            "MAX_ITER":        str(exp.max_iter),
+            "SOLVER":          exp.solver,
+            "RANDOM_SEED":     str(exp.random_seed),
+        })
+
+        result = subprocess.run(
+            [sys.executable, "train/train.py"],
+            env=env,
+        )
+
+        status = "✅" if result.returncode == 0 else "❌"
+        print(f"{status} {exp.name} завершён (code={result.returncode})\n")
+
+
+if __name__ == "__main__":
+    main()

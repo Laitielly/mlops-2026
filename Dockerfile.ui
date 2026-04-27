@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt requirements.ui.txt ./
+RUN pip install --no-cache-dir -r requirements.ui.txt
+
+COPY config/ ./config/
+COPY ui/ ./ui/
+
+ENV SERVING_URL="http://localhost:9000/serve/news-topic"
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "ui/app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true"]

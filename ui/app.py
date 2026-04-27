@@ -1,32 +1,36 @@
 """
-Streamlit UI для классификации тематики новостей.
-Работает через HTTP к ClearML Serving endpoint.
-Модель НЕ загружается напрямую.
+Streamlit UI — новостной классификатор.
+Работает только через HTTP к serving endpoint.
 """
 
+import os
+import sys
 import time
 import requests
 import streamlit as st
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from app_config import cfg
 
-ENDPOINT_URL = st.sidebar.text_input(
-    "Serving Endpoint URL",
-    value="http://localhost:8080/serve/news-topic",
-    help="URL ClearML Serving endpoint"
+st.set_page_config(
+    page_title="News Topic Classifier",
+    page_icon="📰",
+    layout="centered",
 )
 
-CLASS_NAMES  = ["World", "Sports", "Business", "Sci/Tech"]
+if "input_text" not in st.session_state:
+    st.session_state.input_text = ""
+
+
+DEFAULT_URL = os.getenv("SERVING_URL", cfg.ui.default_serving_url)
+TIMEOUT     = cfg.ui.request_timeout
+
 CLASS_EMOJIS = {
     "World":    "🌍",
     "Sports":   "⚽",
     "Business": "💼",
     "Sci/Tech": "🔬",
-}
-CLASS_COLORS = {
-    "World":    "#4A90D9",
-    "Sports":   "#27AE60",
-    "Business": "#E67E22",
-    "Sci/Tech": "#8E44AD",
 }
 
 EXAMPLES = [
@@ -39,132 +43,131 @@ EXAMPLES = [
 ]
 
 
-st.set_page_config(
-    page_title="News Topic Classifier",
-    page_icon="📰",
-    layout="centered",
-)
+with st.sidebar:
+    st.header("⚙️ Настройки")
+    endpoint_url = st.text_input(
+        "Serving Endpoint URL",
+        value=DEFAULT_URL,
+        help="URL ClearML Serving endpoint",
+    )
+
+    st.divider()
+    st.markdown("**Статус endpoint**")
+
+    if st.button("🔄 Проверить"):
+        try:
+            health_url = endpoint_url.rsplit("/serve", 1)[0] + "/health"
+            r = requests.get(health_url, timeout=3)
+            if r.status_code == 200:
+                info = r.json()
+                st.success("✅ Online")
+                st.caption(f"Model: `{info.get('model_id', 'unknown')[:8]}...`")
+            else:
+                st.error(f"⚠️ HTTP {r.status_code}")
+        except Exception:
+            st.error("❌ Недоступен")
+
+    st.divider()
+    st.markdown(
+        "<small>MLOps проект · ClearML + Streamlit  \n"
+        "Модель: TF-IDF + LogReg  \n"
+        "Датасет: AG News</small>",
+        unsafe_allow_html=True,
+    )
+
 
 st.title("📰 News Topic Classifier")
 st.markdown(
-    "Классификация тематики новостного текста: "
-    "**World** · **Sports** · **Business** · **Sci/Tech**  \n"
-    "*Инференс через ClearML Serving HTTP endpoint*"
+    "Классификация тематики: "
+    "**🌍 World** · **⚽ Sports** · **💼 Business** · **🔬 Sci/Tech**  \n"
+    "*Инференс через HTTP endpoint*"
 )
-
 st.divider()
 
 
 st.subheader("💡 Быстрые примеры")
 cols = st.columns(3)
-selected_example = None
 for i, ex in enumerate(EXAMPLES):
-    col = cols[i % 3]
-    short = ex[:45] + "..." if len(ex) > 45 else ex
-    if col.button(short, key=f"ex_{i}"):
-        selected_example = ex
+    if cols[i % 3].button(
+        ex[:45] + "..." if len(ex) > 45 else ex,
+        key=f"ex_{i}",
+        use_container_width=True,
+    ):
+        st.session_state.input_text = ex
+        st.rerun()
 
 
 st.subheader("✍️ Введите текст новости")
-
-default_text = selected_example if selected_example else ""
 user_text = st.text_area(
-    label="Текст новости",
-    value=default_text,
+    label="text",
+    value=st.session_state.input_text,
     height=130,
-    placeholder="Введите или вставьте текст новости на английском языке...",
+    placeholder="Введите текст новости на английском...",
     label_visibility="collapsed",
 )
+st.session_state.input_text = user_text
 
-predict_btn = st.button("🔍 Predict", type="primary", use_container_width=True)
+predict_btn = st.button(
+    "🔍 Predict",
+    type="primary",
+    use_container_width=True,
+)
+
 
 def call_endpoint(text: str, url: str) -> tuple[dict, float]:
-    """
-    Отправляет POST-запрос к ClearML Serving.
-    Возвращает (response_dict, latency_ms).
-    Бросает исключение при ошибке.
-    """
-    payload = {"text": text}
-    t0 = time.perf_counter()
-    response = requests.post(
-        url,
-        json=payload,
-        timeout=10,
-    )
-    latency = (time.perf_counter() - t0) * 1000  # ms
+    t0       = time.perf_counter()
+    response = requests.post(url, json={"text": text}, timeout=TIMEOUT)
+    latency  = (time.perf_counter() - t0) * 1000
     response.raise_for_status()
     return response.json(), latency
 
 
 if predict_btn:
-    if not user_text.strip():
-        st.warning("⚠️ Пожалуйста, введите текст для классификации.")
+    text = st.session_state.input_text.strip()
+
+    if not text:
+        st.warning("⚠️ Введите текст для классификации.")
     else:
-        with st.spinner("Отправляем запрос к модели..."):
+        with st.spinner("Отправляем запрос..."):
             try:
-                result, latency = call_endpoint(user_text.strip(), ENDPOINT_URL)
+                result, latency = call_endpoint(text, endpoint_url)
 
                 label      = result.get("label", "Unknown")
                 confidence = result.get("confidence", 0.0)
                 probs      = result.get("probabilities", {})
                 emoji      = CLASS_EMOJIS.get(label, "❓")
-                color      = CLASS_COLORS.get(label, "#333")
 
                 st.divider()
                 st.subheader("📊 Результат")
 
-                col1, col2, col3 = st.columns(3)
-                col1.metric(
-                    label="Тематика",
-                    value=f"{emoji} {label}",
-                )
-                col2.metric(
-                    label="Уверенность",
-                    value=f"{confidence * 100:.1f}%",
-                )
-                col3.metric(
-                    label="⏱️ Latency",
-                    value=f"{latency:.1f} ms",
-                )
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Тематика",    f"{emoji} {label}")
+                c2.metric("Уверенность", f"{confidence * 100:.1f}%")
+                c3.metric("⏱️ Latency",  f"{latency:.1f} ms")
 
                 if probs:
-                    st.subheader("📈 Вероятности по классам")
-                    sorted_probs = sorted(
+                    st.subheader("📈 Вероятности")
+                    for cls, prob in sorted(
                         probs.items(), key=lambda x: x[1], reverse=True
-                    )
-                    for cls, prob in sorted_probs:
-                        bar_color = CLASS_COLORS.get(cls, "#999")
+                    ):
                         st.markdown(
-                            f"**{CLASS_EMOJIS.get(cls, '')} {cls}** — {prob * 100:.1f}%"
+                            f"**{CLASS_EMOJIS.get(cls,'')} {cls}** "
+                            f"— {prob * 100:.1f}%"
                         )
                         st.progress(float(prob))
 
-                with st.expander("🔧 Raw JSON ответ"):
+                with st.expander("🔧 Raw JSON"):
                     st.json(result)
-                    st.caption(f"Latency: {latency:.2f} ms | Endpoint: {ENDPOINT_URL}")
+                    st.caption(f"{latency:.1f} ms · {endpoint_url}")
 
             except requests.exceptions.ConnectionError:
                 st.error(
-                    "❌ **Endpoint недоступен**  \n"
-                    f"Не удалось подключиться к `{ENDPOINT_URL}`.  \n"
-                    "Проверьте, что ClearML Serving запущен."
+                    f"❌ **Endpoint недоступен**: `{endpoint_url}`  \n"
+                    "Запустите: `python serving/serve.py`"
                 )
             except requests.exceptions.Timeout:
-                st.error(
-                    "⏰ **Таймаут**  \n"
-                    "Сервер не ответил за 10 секунд. Попробуйте позже."
-                )
+                st.error(f"⏰ Таймаут ({TIMEOUT}s) — сервер не ответил.")
             except requests.exceptions.HTTPError as e:
-                st.error(
-                    f"🚫 **HTTP ошибка**: {e.response.status_code}  \n"
-                    f"```{e.response.text[:300]}```"
-                )
+                st.error(f"🚫 HTTP {e.response.status_code}: {e.response.text[:200]}")
             except Exception as e:
-                st.error(f"💥 **Неожиданная ошибка**: {e}")
-
-st.divider()
-st.markdown(
-    "<small>MLOps курсовой проект · ClearML + Streamlit · "
-    "Модель: TF-IDF + LogReg · Датасет: AG News</small>",
-    unsafe_allow_html=True,
-)
+                st.error(f"💥 Ошибка: {e}")
