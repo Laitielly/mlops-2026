@@ -23,7 +23,7 @@ jobs:
           script: |
             set -e
 
-            PROJECT_DIR=/opt/mlops-spring-2026
+            PROJECT_DIR=/opt/mlops
             cd $PROJECT_DIR
             git pull origin main
             source .env
